@@ -11,7 +11,7 @@
 #define _path_hpp
 
 class Path {
-private:
+protected:
 	int _size;
 	int _distance;
 	int* _nodes;

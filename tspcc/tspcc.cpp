@@ -74,14 +74,17 @@ static void branch_and_bound(Path* current)
 					current->add(i);
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
+					int pushed = 0;
 					if(global.jobs->size() < QUEUE_SIZE){
 						global.jobs->push(Path(current));
+						// pushed = global.jobs->push(Path(current));
 					}
-					// Sinon
+					// si il n'y a pas eu de push
 					// Continuer de taffer
-					else{
+					if(!pushed){
 						branch_and_bound(current);
 					}
+
 					current->pop();
 				}
 			}
