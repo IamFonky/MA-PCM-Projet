@@ -24,6 +24,15 @@ public:
 		_graph = 0;
 	}
 
+	Path(Path* path)
+	{
+		_graph = path->_graph;
+		_nodes = new int[max() + 1];
+		memcpy(_nodes,path->_nodes,max() + 1);
+		_distance = path->_distance;
+		clear();
+	}
+
 	Path(Graph* graph)
 	{
 		_graph = graph;
