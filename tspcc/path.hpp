@@ -5,6 +5,7 @@
 //
 
 #include <iostream>
+#include <cstring>
 
 #ifndef _path_hpp
 #define _path_hpp
@@ -28,7 +29,7 @@ public:
 	{
 		_graph = path->_graph;
 		_nodes = new int[max() + 1];
-		memcpy(_nodes,path->_nodes,max() + 1);
+		std::memcpy(_nodes,path->_nodes,max() + 1);
 		_distance = path->_distance;
 		clear();
 	}
