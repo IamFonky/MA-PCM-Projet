@@ -9,6 +9,10 @@
 #include "tspfile.hpp"
 
 #include <pthread.h>
+#include <queue>
+
+#define QUEUE_SIZE 100
+#define NB_THREADS 16
 
 enum Verbosity {
 	VER_NONE = 0,
@@ -21,6 +25,7 @@ enum Verbosity {
 
 static struct {
 	Path* shortest;
+	std::queue<Path>* jobs;
 	Verbosity verbose;
 	struct {
 		int verified;	// # of paths checked
@@ -41,7 +46,6 @@ static const struct {
 	.BLUE = { 27, '[', '3', '6', 'm', 0 },
 	.ORIGINAL = { 27, '[', '3', '9', 'm', 0 },
 };
-
 
 static void branch_and_bound(Path* current)
 {
@@ -68,7 +72,19 @@ static void branch_and_bound(Path* current)
 			for (int i=1; i<current->max(); i++) {
 				if (!current->contains(i)) {
 					current->add(i);
-					branch_and_bound(current);
+					// Vérif si queue est dispo
+					// si oui, écrire dans la queue
+					int pushed = 0;
+					if(global.jobs->size() < QUEUE_SIZE){
+						global.jobs->push(Path(current));
+						// pushed = global.jobs->push(Path(current));
+					}
+					// si il n'y a pas eu de push
+					// Continuer de taffer
+					if(!pushed){
+						branch_and_bound(current);
+					}
+
 					current->pop();
 				}
 			}
@@ -82,52 +98,14 @@ static void branch_and_bound(Path* current)
 	}
 }
 
-#define MAX_THREAD 16
-
-static void* branch_and_bound_threaded(Path* current)
-{
-
-	pthread_t ptid[MAX_THREAD];
-  
-	if (global.verbose & VER_ANALYSE)
-		std::cout << "analysing " << current << '\n';
-
-	if (current->leaf()) {
-		// this is a leaf
-		current->add(0);
-		if (global.verbose & VER_COUNTERS)
-			global.counter.verified ++;
-		if (current->distance() < global.shortest->distance()) {
-			if (global.verbose & VER_SHORTER)
-				std::cout << "shorter: " << current << '\n';
-			global.shortest->copy(current);
-			if (global.verbose & VER_COUNTERS)
-				global.counter.found ++;
-		}
-		current->pop();
-	} else {
-		// not yet a leaf
-		if (current->distance() < global.shortest->distance()) {
-			// continue branching
-			for (int i=1; i<current->max(); i += MAX_THREAD) {
-				
-				for(int j=0; j<current->max() && j<MAX_THREAD;j++){
-					if (!current->contains(i)) {
-						current->add(i);
-						pthread_create((ptid + j), NULL, (void *(*)(void *)) &branch_and_bound, current);
-						branch_and_bound(current);
-						current->pop();
-					}
-					pthread_join(ptid[j], NULL);
-				}
-
-			}
-		} else {
-			// current already >= shortest known so far, bound
-			if (global.verbose & VER_BOUND )
-				std::cout << "bound " << current << '\n';
-			if (global.verbose & VER_COUNTERS)
-				global.counter.bound[current->size()] ++;
+static void* branch_and_bound_task(void *arg)
+{	
+	int IS_RUNNING = 0;
+	while(IS_RUNNING){
+		if(!global.jobs->empty()){
+			Path job_to_do =  global.jobs->front();
+			global.jobs->pop();
+			branch_and_bound(&job_to_do);
 		}
 	}
 }
@@ -200,6 +178,13 @@ int main(int argc, char* argv[])
 	Path* current = new Path(g);
 	current->add(0);
 
+	// Start thread t1
+    pthread_t workers[NB_THREADS];
+ 
+	global.jobs->push(current);
+	for(int i = 0; i < NB_THREADS; ++i){
+		pthread_create(&(workers[i]), NULL, &branch_and_bound_task, NULL);
+	}
 	branch_and_bound(current);
 
 	std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';

@@ -5,12 +5,13 @@
 //
 
 #include <iostream>
+#include <cstring>
 
 #ifndef _path_hpp
 #define _path_hpp
 
 class Path {
-private:
+protected:
 	int _size;
 	int _distance;
 	int* _nodes;
@@ -22,6 +23,15 @@ public:
 		delete[] _nodes;
 		_nodes = 0;
 		_graph = 0;
+	}
+
+	Path(Path* path)
+	{
+		_graph = path->_graph;
+		_nodes = new int[max() + 1];
+		std::memcpy(_nodes,path->_nodes,max() + 1);
+		_distance = path->_distance;
+		clear();
 	}
 
 	Path(Graph* graph)
