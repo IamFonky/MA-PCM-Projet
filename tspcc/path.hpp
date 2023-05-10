@@ -30,7 +30,7 @@ public:
 	{
 		_graph = path->_graph;
 		_nodes = new int[max() + 1];
-		std::memcpy(_nodes,path->_nodes,max() + 1);
+		std::memcpy(_nodes,path->_nodes,(max() + 1) * sizeof(int));
 		_distance = path->_distance;
 		clear();
 	}

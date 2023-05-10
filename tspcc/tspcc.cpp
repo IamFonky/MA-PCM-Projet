@@ -8,9 +8,12 @@
 #include "path.hpp"
 #include "atomic_path.hpp"
 #include "tspfile.hpp"
+#include "include/atomic_queue/atomic_queue.h"
 
 #include <pthread.h>
 #include <queue>
+#include <chrono>
+#include <thread>
 
 #define QUEUE_SIZE 100
 #define NB_THREADS 16
@@ -22,11 +25,17 @@ enum Verbosity {
 	VER_BOUND = 4,
 	VER_ANALYSE = 8,
 	VER_COUNTERS = 16,
+	VER_QUEUE = 32,
+	VER_ALL = 255
 };
+
+using Element = Path*;                                                        // Queue element type.
+Element constexpr NIL = static_cast<Element>(NULL);                                // Atomic elements require a special value that cannot be pushed/popped.
+using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
 
 static struct {
 	AtomicPath* shortest;
-	std::queue<Path>* jobs;
+	Queue* jobs;
 	Verbosity verbose;
 	struct {
 		int verified;	// # of paths checked
@@ -75,9 +84,15 @@ static void branch_and_bound(Path* current)
 					current->add(i);
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
-					int pushed = 0;
-					if(global.jobs->size() < QUEUE_SIZE){
-						global.jobs->push(Path(current));
+					bool pushed = false;
+					if(global.jobs->get_size() < QUEUE_SIZE){
+						Path* newPath = new Path(current);
+						global.jobs->push(newPath);
+						if(global.verbose & VER_QUEUE){
+							std::cout << "push in queue " << global.jobs->get_size() << '\n';
+							std::cout << "path " << newPath << '\n';
+						}
+						pushed = true;
 						// pushed = global.jobs->push(Path(current));
 					}
 					// si il n'y a pas eu de push
@@ -101,14 +116,18 @@ static void branch_and_bound(Path* current)
 
 static void* branch_and_bound_task(void *arg)
 {	
-	int IS_RUNNING = 0;
-	while(IS_RUNNING){
-		if(!global.jobs->empty()){
-			Path job_to_do =  global.jobs->front();
-			global.jobs->pop();
-			branch_and_bound(&job_to_do);
-		}
+	int IS_RUNNING = 1;
+	while(!global.jobs->was_empty()){
+		// if(!global.jobs->was_empty()){
+			Path* job_to_do =  global.jobs->pop();
+			if(global.verbose & VER_QUEUE){
+				std::cout << "pop in queue" << global.jobs->get_size() << '\n';
+				std::cout << "path " << job_to_do << '\n';
+			}
+			branch_and_bound(job_to_do);
+		// }
 	}
+	return 0;
 }
 
 void reset_counters(int size)
@@ -152,7 +171,7 @@ int main(int argc, char* argv[])
 	char* fname = 0;
 	if (argc == 2) {
 		fname = argv[1];
-		global.verbose = VER_NONE;
+		global.verbose = (Verbosity)(VER_QUEUE);
 	} else {
 		if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
 			global.verbose = (Verbosity) (argv[1][2] ? atoi(argv[1]+2) : 1);
@@ -182,11 +201,20 @@ int main(int argc, char* argv[])
 	// Start thread t1
     pthread_t workers[NB_THREADS];
  
+	global.jobs = new Queue(QUEUE_SIZE);
 	global.jobs->push(current);
-	for(int i = 0; i < NB_THREADS; ++i){
+	pthread_create(workers, NULL, &branch_and_bound_task, NULL);
+	// Waiting 1 sec before starting the other threads
+	std::this_thread::sleep_for(std::chrono::milliseconds(100000));
+	for(int i = 1; i < NB_THREADS - 1; ++i){
 		pthread_create(&(workers[i]), NULL, &branch_and_bound_task, NULL);
 	}
-	branch_and_bound(current);
+
+	for(int i = 0; i < NB_THREADS; ++i){
+		pthread_join(workers[i],NULL);
+	}
+
+	// branch_and_bound(current);
 
 	std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
 

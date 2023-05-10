@@ -1,13 +1,13 @@
 #  Copyright (c) 2012 Marcelo Pasin. All rights reserved.
 
-CFLAGS=-O3 -Wall
-LDFLAGS=-O3 -lm
+CFLAGS=-O3 -Wall -g
+LDFLAGS=-O3 -lm -g
 
 all: tspcc atomic
 
 tspcc: tspcc.o
 	c++ -o tspcc $(LDFLAGS) tspcc.o
-
+	
 tspcc.o: tspcc.cpp graph.hpp path.hpp tspfile.hpp atomic_queue.hpp
 	c++ $(CFLAGS) -c tspcc.cpp
 
