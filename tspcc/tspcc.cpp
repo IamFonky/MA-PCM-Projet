@@ -6,6 +6,7 @@
 
 #include "graph.hpp"
 #include "path.hpp"
+#include "atomic_path.hpp"
 #include "tspfile.hpp"
 
 #include <pthread.h>
@@ -24,7 +25,7 @@ enum Verbosity {
 };
 
 static struct {
-	Path* shortest;
+	AtomicPath* shortest;
 	std::queue<Path>* jobs;
 	Verbosity verbose;
 	struct {
@@ -60,7 +61,7 @@ static void branch_and_bound(Path* current)
 		if (current->distance() < global.shortest->distance()) {
 			if (global.verbose & VER_SHORTER)
 				std::cout << "shorter: " << current << '\n';
-			global.shortest->copy(current);
+			global.shortest->copyIfShorter(current);
 			if (global.verbose & VER_COUNTERS)
 				global.counter.found ++;
 		}
@@ -169,7 +170,7 @@ int main(int argc, char* argv[])
 	if (global.verbose & VER_COUNTERS)
 		reset_counters(g->size());
 
-	global.shortest = new Path(g);
+	global.shortest = new AtomicPath(g);
 	for (int i=0; i<g->size(); i++) {
 		global.shortest->add(i);
 	}
