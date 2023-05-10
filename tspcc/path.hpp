@@ -32,26 +32,9 @@ public:
 	Path(Path* path)
 	: Path(path->_graph)
 	{
-		// _graph = path->_graph;
-		// _nodes = new int[max() + 1];
-		// std::memcpy(_nodes,path->_nodes,(max() + 1) * sizeof(int));
-		// std::copy(path->_nodes, path->_nodes+(max()) * sizeof(int), _nodes);   //auto copying
-		// std::copy(std::begin(*(path->_nodes)), std::end(*path->_nodes), std::begin(_nodes));
-
-		// const int n = 5;
-		// int src[] = {1, 3, 5, 7, 9};
-		// int dest[n];
-		// std::copy(std::begin(src), std::end(src), std::begin(dest));
-
-		std::cout << "MAX SIZE " << max() << "\n";
-		std::cout << "PATH SIZE " << path->_size << "\n";
-
-		for(int i = 0; i < (path->_size); ++i){
-			add(path->_nodes[i]);
-		}
-		
+		std::memcpy(_nodes,path->_nodes,(max() + 1) * sizeof(int));
+		_size = path->_size;
 		_distance = path->_distance;
-		clear();
 	}
 
 	Path(Graph* graph)

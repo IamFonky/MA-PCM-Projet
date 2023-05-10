@@ -11,12 +11,13 @@
 #include "include/atomic_queue/atomic_queue.h"
 
 #include <pthread.h>
+#include <getopt.h>
 #include <queue>
 #include <chrono>
 #include <thread>
 
-#define QUEUE_SIZE 100
-#define NB_THREADS 16
+#define QUEUE_SIZE 16
+// #define NB_THREADS 16
 
 enum Verbosity {
 	VER_NONE = 0,
@@ -45,6 +46,7 @@ static struct {
 	int size;
 	int total;		// number of paths to check
 	int* fact;
+	int nb_threads;
 } global;
 
 static const struct {
@@ -89,8 +91,10 @@ static void branch_and_bound(Path* current)
 						Path* newPath = new Path(current);
 						global.jobs->push(newPath);
 						if(global.verbose & VER_QUEUE){
+							pthread_t tid = pthread_self();
 							std::cout << "push in queue " << global.jobs->get_size() << '\n';
 							std::cout << "path " << newPath << '\n';
+							std::cout << "TID : " << tid << "\n";
 						}
 						pushed = true;
 						// pushed = global.jobs->push(Path(current));
@@ -121,7 +125,7 @@ static void* branch_and_bound_task(void *arg)
 		// if(!global.jobs->was_empty()){
 			Path* job_to_do =  global.jobs->pop();
 			if(global.verbose & VER_QUEUE){
-				std::cout << "pop in queue" << global.jobs->get_size() << '\n';
+				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
 			}
 			branch_and_bound(job_to_do);
@@ -166,21 +170,65 @@ void print_counters()
 	std::cout << "check: total " << (global.total==(global.counter.verified + equiv) ? "==" : "!=") << " verified + total bound equivalent\n";
 }
 
+// Graph* parse_args(int argc, char* argv[]){
+// 	option longopts[] = {
+//         {"file", required_argument, NULL, 'f'}, 
+//         {"verbosity", optional_argument, NULL, 'v'}, 
+//         {"thread-count", optional_argument, NULL, 't'}, 
+//         {"queue-size", optional_argument, NULL, 'q'}, 
+// 		{0}};
+
+//     while (1) {
+//         const int opt = getopt_long(argc, argv, "vtq::", longopts, 0);
+
+//         if (opt == -1) {
+//             break;
+//         }
+
+//         switch (opt) {
+//             case 'f':
+//                 // ...
+// 				cvalue = optarg;
+// 			break;
+//             case 'v':
+//                 // ...
+// 			break;
+//             case 't':
+//                 // ...
+// 			break;
+//             case 'q':
+//                 // ...
+// 			break;
+//         }
+//     }
+// }
+
 int main(int argc, char* argv[])
 {
 	char* fname = 0;
 	if (argc == 2) {
 		fname = argv[1];
-		global.verbose = (Verbosity)(VER_QUEUE);
+		// global.verbose = (Verbosity)(VER_QUEUE);
+		// global.verbose = (Verbosity)(VER_ANALYSE);
+		global.verbose = (Verbosity)(VER_NONE);
+		global.nb_threads = 1;
 	} else {
 		if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
 			global.verbose = (Verbosity) (argv[1][2] ? atoi(argv[1]+2) : 1);
+			fname = argv[2];
+		}
+		if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 't') {
+			global.nb_threads = (Verbosity) (argv[1][2] ? atoi(argv[1]+2) : 1);
 			fname = argv[2];
 		} else {
 			fprintf(stderr, "usage: %s [-v#] filename\n", argv[0]);
 			exit(1);
 		}
 	}
+
+	std::cout << "number of threads " << global.nb_threads << '\n';
+	std::cout << "size of queue " << QUEUE_SIZE << '\n';
+
 
 	Graph* g = TSPFile::graph(fname);
 	if (global.verbose & VER_GRAPH)
@@ -199,22 +247,23 @@ int main(int argc, char* argv[])
 	current->add(0);
 
 	// Start thread t1
-    pthread_t workers[NB_THREADS];
+    // pthread_t workers[NB_THREADS];
+    // pthread_t* workers = (pthread_t*)malloc(global.nb_threads*sizeof(pthread_t));
+    pthread_t* workers = new pthread_t[global.nb_threads];
  
 	global.jobs = new Queue(QUEUE_SIZE);
 	global.jobs->push(current);
-	pthread_create(workers, NULL, &branch_and_bound_task, NULL);
+
+	pthread_create(workers, NULL, branch_and_bound_task, NULL);
 	// Waiting 1 sec before starting the other threads
-	std::this_thread::sleep_for(std::chrono::milliseconds(100000));
-	for(int i = 1; i < NB_THREADS - 1; ++i){
-		pthread_create(&(workers[i]), NULL, &branch_and_bound_task, NULL);
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	for(int i = 1; i < global.nb_threads; ++i){
+		pthread_create(&(workers[i]), NULL, branch_and_bound_task, NULL);
 	}
 
-	for(int i = 0; i < NB_THREADS; ++i){
+	for(int i = 0; i < global.nb_threads; ++i){
 		pthread_join(workers[i],NULL);
 	}
-
-	// branch_and_bound(current);
 
 	std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
 
