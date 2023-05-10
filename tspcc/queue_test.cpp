@@ -3,12 +3,11 @@
 #include <cstdint>
 #include <iostream>
 
-unsigned constexpr CAPACITY = 1024;
+unsigned constexpr CAPACITY = 3;
 
-using Element = uint32_t;                                                        // Queue element type.
-Element constexpr NIL = static_cast<Element>(-1);                                // Atomic elements require a special value that cannot be pushed/popped.
-using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
-
+using Element = uint32_t;
+Element constexpr NIL = static_cast<Element>(-1);
+using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>;
 
 
 int main(int argc, char *argv[])
@@ -19,11 +18,19 @@ int main(int argc, char *argv[])
 
     // Create a queue object shared between all producers and consumers.
     Queue q{CAPACITY};
-    q.push(value1);
-    q.push(value2);
 
-    Element v2= q.pop();
-    printf("value1: %d\n", v2);
-    v2 = q.pop();
-    printf("value2: %d\n", v2);
+    for (size_t i = 0; i < 10; i++)
+    {
+        q.push(i);
+        printf("size: %d\n", q.get_size());
+    }
+
+    Element v1;
+
+    for (size_t i = 0; i < 10; i++)
+    {
+        v1 = q.pop();
+        printf("value: %d\n", v1);
+
+    }
 }

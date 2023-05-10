@@ -297,6 +297,10 @@ public:
         return true;
     }
 
+    size_t get_size() const noexcept {
+        return head_.load(X) - tail_.load(X);
+    }
+
     template<class T>
     void push(T&& element) noexcept {
         unsigned head;
