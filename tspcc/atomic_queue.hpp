@@ -81,7 +81,7 @@ public:
 
     void EnqNode(CONVERSION *queue, NODE *node)
     {
-        CONVERSION last, next, newNode;
+        CONVERSION  newNode;
         node->next.link.ref += 1;
         node->next.link.addr = NULL;
         while (true)

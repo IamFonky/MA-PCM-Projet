@@ -6,25 +6,33 @@
 
 #include <iostream>
 #include <cstring>
+#include <atomic>
 #include "path.hpp"
 
 #ifndef _atomic_path_hpp
 #define _atomic_path_hpp
 
-class AtomicPath : Path {
+class AtomicPath : public Path {
+private:
+    std::atomic_flag _lock = ATOMIC_FLAG_INIT;
+
 public:
-	void copy(AtomicPath* o)
+
+	AtomicPath(Graph* graph)
+	:Path(graph)
+	{}
+	
+	void copyIfShorter(Path* o)
 	{
-		throw "NEED TO BE IMPLEMENTED!";
-		if (max() != o->max()) {
-			delete[] _nodes;
-			_nodes = new int[o->max() + 1];
+		while (_lock.test_and_set(std::memory_order_acquire)) {
+            // Spin while the lock is not available
+        }
+
+		if(o->distance() < distance()){
+			copy(o);
 		}
-		_graph = o->_graph;
-		_size = o->_size;
-		_distance = o->_distance;
-		for (int i=0; i<_size; i++)
-			_nodes[i] = o->_nodes[i];
+
+		_lock.clear(std::memory_order_release); // Release the lock
 	}
 };
 #endif // _atomic_path_hpp
