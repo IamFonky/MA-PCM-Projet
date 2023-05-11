@@ -115,8 +115,8 @@ static void branch_and_bound(Path *current)
 						{
 							pthread_t tid = pthread_self();
 							std::cout << "push in queue " << global.jobs->get_size() << '\n';
-							std::cout << "path " << newPath << '\n';
-							std::cout << "TID : " << tid << "\n";
+							//std::cout << "path " << newPath << '\n';
+							//std::cout << "TID : " << tid << "\n";
 						}
 						pushed = true;
 						// pushed = global.jobs->push(Path(current));
@@ -146,17 +146,17 @@ static void branch_and_bound(Path *current)
 static void *branch_and_bound_task(void *arg)
 {
 	int IS_RUNNING = 1;
-	while (!global.jobs->was_empty())
+	Path *job_to_do = global.jobs->pop();
+	while (job_to_do != nullptr)
 	{
-		// if(!global.jobs->was_empty()){
-		Path *job_to_do = global.jobs->pop();
+		//printf("Thread %ld got job %p\n", pthread_self(), job_to_do);
 		if (global.verbose & VER_QUEUE)
 		{
-			std::cout << "pop in queue " << global.jobs->get_size() << '\n';
-			std::cout << "path " << job_to_do << '\n';
+			//std::cout << "pop in queue " << global.jobs->get_size() << '\n';
+			//std::cout << "path " << job_to_do << '\n';
 		}
 		branch_and_bound(job_to_do);
-		// }
+		job_to_do = global.jobs->pop();
 	}
 	return 0;
 }
