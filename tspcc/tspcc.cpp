@@ -106,25 +106,22 @@ static void branch_and_bound(Path *current)
 					current->add(i);
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
-					bool pushed = false;
-					if (global.jobs->get_size() < global.queue_size)
+					Path *newPath = new Path(current);
+					bool pushed = global.jobs->push(newPath);
+					
+					if (global.verbose & VER_QUEUE)
 					{
-						Path *newPath = new Path(current);
-						global.jobs->push(newPath);
-						if (global.verbose & VER_QUEUE)
-						{
-							pthread_t tid = pthread_self();
-							std::cout << "push in queue " << global.jobs->get_size() << '\n';
-							//std::cout << "path " << newPath << '\n';
-							//std::cout << "TID : " << tid << "\n";
-						}
-						pushed = true;
-						// pushed = global.jobs->push(Path(current));
+						pthread_t tid = pthread_self();
+						std::cout << "push in queue " << global.jobs->get_size() << '\n';
+						//std::cout << "path " << newPath << '\n';
+						//std::cout << "TID : " << tid << "\n";
 					}
+					// pushed = global.jobs->push(Path(current));
 					// si il n'y a pas eu de push
 					// Continuer de taffer
 					if (!pushed)
 					{
+						delete newPath;
 						branch_and_bound(current);
 					}
 
@@ -309,7 +306,7 @@ int main(int argc, char *argv[])
 
 				pthread_create(workers, NULL, branch_and_bound_task, NULL);
 				// Waiting 1 sec before starting the other threads
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+				//std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				for (int i = 1; i < global.nb_threads; ++i)
 				{
 					pthread_create(&(workers[i]), NULL, branch_and_bound_task, NULL);
@@ -330,9 +327,10 @@ int main(int argc, char *argv[])
 				{
 					printf("%d;%d;%d;%ld\n",
 						   global.nb_threads,
-						   global.queue_size,
+						   global.queue_size,1000,
 						   global.shortest->distance(),
 						   std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count());
+						   
 				}
 
 				delete global.shortest;
