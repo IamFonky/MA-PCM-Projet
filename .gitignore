@@ -1,1 +1,4 @@
 .vscode
+*.o
+queue_path_test
+tspcc
