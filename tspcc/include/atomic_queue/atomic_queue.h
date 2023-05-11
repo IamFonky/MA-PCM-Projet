@@ -180,9 +180,10 @@ protected:
                 if(ATOMIC_QUEUE_LIKELY(element != NIL))
                     return element;
                 // Do speculative loads while busy-waiting to avoid broadcasting RFO messages.
-                do
+                return NULL;
+                /*do
                     spin_loop_pause();
-                while(Derived::maximize_throughput_ && q_element.load(X) == NIL);
+                while(Derived::maximize_throughput_ && q_element.load(X) == NIL);*/
             }
         }
     }

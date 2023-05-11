@@ -109,7 +109,7 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if (global.jobs->get_size() < global.queue_size)
+					if (global.jobs->get_size() < global.queue_size ) //blablalba
 					{
 						Path *newPath = new Path(current);
 						global.jobs->push(newPath);
@@ -149,16 +149,16 @@ static void *branch_and_bound_task(void *arg)
 {
 	do
 	{
-		while (!global.jobs->was_empty())
+		Path *job_to_do = global.jobs->pop();
+		while (job_to_do != nullptr)
 		{
-			global.nb_thread_running++;
-			Path *job_to_do = global.jobs->pop();
 			if (global.verbose & VER_QUEUE)
 			{
 				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
 			}
 			branch_and_bound(job_to_do);
+			job_to_do = global.jobs->pop();
 		}
 		global.nb_thread_running--;
 	} while (global.nb_thread_running > 0);
