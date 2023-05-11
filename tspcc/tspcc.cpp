@@ -17,6 +17,7 @@
 #include <chrono>
 #include <thread>
 #include <chrono>
+#include <atomic>
 
 // #define QUEUE_SIZE 16
 // #define NB_THREADS 16
@@ -59,6 +60,7 @@ static struct
 	int min_queue_size;
 	int max_queue_size;
 	int queue_size;
+	std::atomic_int nb_thread_running;
 } global;
 
 static const struct
@@ -145,19 +147,21 @@ static void branch_and_bound(Path *current)
 
 static void *branch_and_bound_task(void *arg)
 {
-	int IS_RUNNING = 1;
-	while (!global.jobs->was_empty())
+	do
 	{
-		// if(!global.jobs->was_empty()){
-		Path *job_to_do = global.jobs->pop();
-		if (global.verbose & VER_QUEUE)
+		while (!global.jobs->was_empty())
 		{
-			std::cout << "pop in queue " << global.jobs->get_size() << '\n';
-			std::cout << "path " << job_to_do << '\n';
+			global.nb_thread_running++;
+			Path *job_to_do = global.jobs->pop();
+			if (global.verbose & VER_QUEUE)
+			{
+				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
+				std::cout << "path " << job_to_do << '\n';
+			}
+			branch_and_bound(job_to_do);
 		}
-		branch_and_bound(job_to_do);
-		// }
-	}
+		global.nb_thread_running--;
+	} while (global.nb_thread_running > 0);
 	return 0;
 }
 
@@ -308,8 +312,6 @@ int main(int argc, char *argv[])
 				global.jobs->push(current);
 
 				pthread_create(workers, NULL, branch_and_bound_task, NULL);
-				// Waiting 1 sec before starting the other threads
-				std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 				for (int i = 1; i < global.nb_threads; ++i)
 				{
 					pthread_create(&(workers[i]), NULL, branch_and_bound_task, NULL);
