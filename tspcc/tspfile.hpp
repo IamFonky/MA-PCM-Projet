@@ -60,7 +60,7 @@ private:
 		int size = 0;
 		line = trim_line(line, true);
 		sscanf(line, "%d", &size);
-		printf("The file contain %d lines\n",size);
+		// printf("The file contain %d lines\n",size);
 		if (size > MAX_NODES)
 			abort("too many points in input");
 		if (size < 1)

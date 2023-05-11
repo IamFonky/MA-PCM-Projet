@@ -12,11 +12,13 @@
 
 #include <pthread.h>
 #include <getopt.h>
+
 #include <queue>
 #include <chrono>
 #include <thread>
+#include <chrono>
 
-#define QUEUE_SIZE 16
+// #define QUEUE_SIZE 16
 // #define NB_THREADS 16
 
 enum Verbosity {
@@ -27,6 +29,7 @@ enum Verbosity {
 	VER_ANALYSE = 8,
 	VER_COUNTERS = 16,
 	VER_QUEUE = 32,
+	VER_LOG_STAT = 64,
 	VER_ALL = 255
 };
 
@@ -47,6 +50,7 @@ static struct {
 	int total;		// number of paths to check
 	int* fact;
 	int nb_threads;
+	int queue_size;
 } global;
 
 static const struct {
@@ -87,7 +91,7 @@ static void branch_and_bound(Path* current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if(global.jobs->get_size() < QUEUE_SIZE){
+					if(global.jobs->get_size() < global.queue_size){
 						Path* newPath = new Path(current);
 						global.jobs->push(newPath);
 						if(global.verbose & VER_QUEUE){
@@ -170,67 +174,58 @@ void print_counters()
 	std::cout << "check: total " << (global.total==(global.counter.verified + equiv) ? "==" : "!=") << " verified + total bound equivalent\n";
 }
 
-// Graph* parse_args(int argc, char* argv[]){
-// 	option longopts[] = {
-//         {"file", required_argument, NULL, 'f'}, 
-//         {"verbosity", optional_argument, NULL, 'v'}, 
-//         {"thread-count", optional_argument, NULL, 't'}, 
-//         {"queue-size", optional_argument, NULL, 'q'}, 
-// 		{0}};
+Graph* parse_args(int argc, char* argv[]){
 
-//     while (1) {
-//         const int opt = getopt_long(argc, argv, "vtq::", longopts, 0);
+	int opt;
 
-//         if (opt == -1) {
-//             break;
-//         }
+	option longopts[] = {
+        {"file", required_argument, NULL, 'f'}, 
+        {"verbosity", required_argument, NULL, 'v'}, 
+        {"thread-count", required_argument, NULL, 't'}, 
+        {"queue-size", required_argument, NULL, 'q'}, 
+		};
 
-//         switch (opt) {
-//             case 'f':
-//                 // ...
-// 				cvalue = optarg;
-// 			break;
-//             case 'v':
-//                 // ...
-// 			break;
-//             case 't':
-//                 // ...
-// 			break;
-//             case 'q':
-//                 // ...
-// 			break;
-//         }
-//     }
-// }
+	Graph* graph = NULL;
+	global.verbose = VER_NONE;
+	global.nb_threads = 2;
+	global.queue_size = 10;
+
+    while ((opt = getopt_long(argc, argv, "f:v:t:q:", longopts, 0)) != -1) {
+        switch (opt) {
+            case 'f':
+				graph = TSPFile::graph(optarg);
+			break;
+            case 'v':
+				global.verbose = (Verbosity) atoi(optarg);
+			break;
+            case 't':
+				global.nb_threads = atoi(optarg);
+			break;
+            case 'q':
+				global.queue_size = atoi(optarg);
+			break;
+        }
+    }
+
+	if(graph == NULL){
+		perror("you need to provide a file name with the option -f\n");
+		exit(1);
+	}
+
+
+	return graph;
+}
 
 int main(int argc, char* argv[])
 {
-	char* fname = 0;
-	if (argc == 2) {
-		fname = argv[1];
-		// global.verbose = (Verbosity)(VER_QUEUE);
-		// global.verbose = (Verbosity)(VER_ANALYSE);
-		global.verbose = (Verbosity)(VER_NONE);
-		global.nb_threads = 1;
-	} else {
-		if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
-			global.verbose = (Verbosity) (argv[1][2] ? atoi(argv[1]+2) : 1);
-			fname = argv[2];
-		}
-		if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 't') {
-			global.nb_threads = (Verbosity) (argv[1][2] ? atoi(argv[1]+2) : 1);
-			fname = argv[2];
-		} else {
-			fprintf(stderr, "usage: %s [-v#] filename\n", argv[0]);
-			exit(1);
-		}
+	auto start = std::chrono::high_resolution_clock::now();
+	Graph* g = parse_args(argc,argv);
+
+	if(global.verbose != VER_LOG_STAT){
+		std::cout << "number of threads " << global.nb_threads << '\n';
+		std::cout << "size of queue " << global.queue_size << '\n';
 	}
 
-	std::cout << "number of threads " << global.nb_threads << '\n';
-	std::cout << "size of queue " << QUEUE_SIZE << '\n';
-
-
-	Graph* g = TSPFile::graph(fname);
 	if (global.verbose & VER_GRAPH)
 		std::cout << COLOR.BLUE << g << COLOR.ORIGINAL;
 
@@ -246,12 +241,9 @@ int main(int argc, char* argv[])
 	Path* current = new Path(g);
 	current->add(0);
 
-	// Start thread t1
-    // pthread_t workers[NB_THREADS];
-    // pthread_t* workers = (pthread_t*)malloc(global.nb_threads*sizeof(pthread_t));
     pthread_t* workers = new pthread_t[global.nb_threads];
  
-	global.jobs = new Queue(QUEUE_SIZE);
+	global.jobs = new Queue(global.queue_size);
 	global.jobs->push(current);
 
 	pthread_create(workers, NULL, branch_and_bound_task, NULL);
@@ -265,10 +257,20 @@ int main(int argc, char* argv[])
 		pthread_join(workers[i],NULL);
 	}
 
-	std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
+	if(global.verbose != VER_LOG_STAT)
+		std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
 
 	if (global.verbose & VER_COUNTERS)
 		print_counters();
+
+	if(global.verbose & VER_LOG_STAT){
+		printf(	"%d;%d;%d;%ld\n",
+				global.nb_threads,
+				global.queue_size,
+				global.shortest->distance(),
+				std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count()
+				);
+	}
 
 	return 0;
 }
