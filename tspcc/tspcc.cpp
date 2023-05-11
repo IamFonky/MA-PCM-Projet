@@ -109,10 +109,10 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if (global.jobs->get_size() < global.queue_size ) //blablalba
+					if (global.jobs->get_size() < global.queue_size)
 					{
 						Path *newPath = new Path(current);
-						global.jobs->push(newPath);
+						pushed = global.jobs->push(newPath);
 						if (global.verbose & VER_QUEUE)
 						{
 							pthread_t tid = pthread_self();
@@ -120,8 +120,10 @@ static void branch_and_bound(Path *current)
 							std::cout << "path " << newPath << '\n';
 							std::cout << "TID : " << tid << "\n";
 						}
-						pushed = true;
-						// pushed = global.jobs->push(Path(current));
+						if (!pushed)
+						{
+							delete newPath;
+						}
 					}
 					// si il n'y a pas eu de push
 					// Continuer de taffer
