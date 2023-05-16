@@ -18,9 +18,11 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
-
-// #define QUEUE_SIZE 16
-// #define NB_THREADS 16
+#include <fstream>
+#include <cstdio>
+#include <algorithm>
+#include <numeric>
+#include <filesystem>
 
 enum Verbosity
 {
@@ -41,9 +43,22 @@ using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>;
 
 static struct
 {
+	Verbosity verbose;
+	int nb_samples;
+	int min_nb_threads;
+	int max_nb_threads;
+	int thread_step;
+	int min_queue_size;
+	int max_queue_size;
+	int queue_step;
+	int queue_size;
+	std::string output_path;
+} config;
+
+static struct
+{
 	AtomicPath *shortest;
 	Queue *jobs;
-	Verbosity verbose;
 	struct
 	{
 		int verified; // # of paths checked
@@ -53,13 +68,6 @@ static struct
 	int size;
 	int total; // number of paths to check
 	int *fact;
-	int nb_samples;
-	int min_nb_threads;
-	int max_nb_threads;
-	int nb_threads;
-	int min_queue_size;
-	int max_queue_size;
-	int queue_size;
 	std::atomic_int nb_thread_running;
 } global;
 
@@ -76,21 +84,21 @@ static const struct
 
 static void branch_and_bound(Path *current)
 {
-	if (global.verbose & VER_ANALYSE)
+	if (config.verbose & VER_ANALYSE)
 		std::cout << "analysing " << current << '\n';
 
 	if (current->leaf())
 	{
 		// this is a leaf
 		current->add(0);
-		if (global.verbose & VER_COUNTERS)
+		if (config.verbose & VER_COUNTERS)
 			global.counter.verified++;
 		if (current->distance() < global.shortest->distance())
 		{
-			if (global.verbose & VER_SHORTER)
+			if (config.verbose & VER_SHORTER)
 				std::cout << "shorter: " << current << '\n';
 			global.shortest->copyIfShorter(current);
-			if (global.verbose & VER_COUNTERS)
+			if (config.verbose & VER_COUNTERS)
 				global.counter.found++;
 		}
 		current->pop();
@@ -109,11 +117,11 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if (global.jobs->get_size() < global.queue_size)
+					if (global.jobs->get_size() < config.queue_size)
 					{
 						Path *newPath = new Path(current);
 						pushed = global.jobs->push(newPath);
-						if (global.verbose & VER_QUEUE)
+						if (config.verbose & VER_QUEUE)
 						{
 							pthread_t tid = pthread_self();
 							std::cout << "push in queue " << global.jobs->get_size() << '\n';
@@ -139,9 +147,9 @@ static void branch_and_bound(Path *current)
 		else
 		{
 			// current already >= shortest known so far, bound
-			if (global.verbose & VER_BOUND)
+			if (config.verbose & VER_BOUND)
 				std::cout << "bound " << current << '\n';
-			if (global.verbose & VER_COUNTERS)
+			if (config.verbose & VER_COUNTERS)
 				global.counter.bound[current->size()]++;
 		}
 	}
@@ -154,7 +162,7 @@ static void *branch_and_bound_task(void *arg)
 		Path *job_to_do = global.jobs->pop();
 		while (job_to_do != nullptr)
 		{
-			if (global.verbose & VER_QUEUE)
+			if (config.verbose & VER_QUEUE)
 			{
 				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
@@ -217,19 +225,25 @@ Graph *parse_args(int argc, char *argv[])
 		{"samples-count", required_argument, NULL, 's'},
 		{"thread-count-min", required_argument, NULL, 't'},
 		{"thread-count-max", required_argument, NULL, 'T'},
+		{"thread-step", required_argument, NULL, 'i'},
 		{"queue-size-min", required_argument, NULL, 'q'},
 		{"queue-size-max", required_argument, NULL, 'Q'},
+		{"queue-step", required_argument, NULL, 'j'},
+		{"output-path", required_argument, NULL, 'o'},
 	};
 
 	Graph *graph = NULL;
-	global.verbose = VER_NONE;
-	global.nb_samples = 1;
-	global.min_nb_threads = 2;
-	global.max_nb_threads = -1;
-	global.min_queue_size = 10;
-	global.max_queue_size = -1;
+	config.verbose = VER_NONE;
+	config.nb_samples = 1;
+	config.min_nb_threads = 2;
+	config.max_nb_threads = -1;
+	config.thread_step = 1;
+	config.min_queue_size = 10;
+	config.max_queue_size = -1;
+	config.queue_step = 1;
+	config.output_path = "";
 
-	while ((opt = getopt_long(argc, argv, "f:v:s:t:T:q:Q:", longopts, 0)) != -1)
+	while ((opt = getopt_long(argc, argv, "f:v:s:t:T:q:Q:o:i:j:", longopts, 0)) != -1)
 	{
 		switch (opt)
 		{
@@ -237,30 +251,51 @@ Graph *parse_args(int argc, char *argv[])
 			graph = TSPFile::graph(optarg);
 			break;
 		case 'v':
-			global.verbose = (Verbosity)atoi(optarg);
+			config.verbose = (Verbosity)atoi(optarg);
 			break;
 		case 's':
-			global.nb_samples = atoi(optarg);
+			config.nb_samples = atoi(optarg);
 			break;
 		case 't':
-			global.min_nb_threads = atoi(optarg);
+			config.min_nb_threads = atoi(optarg);
 			break;
 		case 'T':
-			global.max_nb_threads = atoi(optarg);
+			config.max_nb_threads = atoi(optarg);
+			break;
+		case 'i':
+			config.thread_step = atoi(optarg);
 			break;
 		case 'q':
-			global.min_queue_size = atoi(optarg);
+			config.min_queue_size = atoi(optarg);
 			break;
 		case 'Q':
-			global.max_queue_size = atoi(optarg);
+			config.max_queue_size = atoi(optarg);
+			break;
+		case 'j':
+			config.queue_step = atoi(optarg);
+			break;
+		case 'o':
+			config.output_path = optarg;
+			std::filesystem::path p(config.output_path);
+			std::filesystem::path dir = p.parent_path();
+			if (!std::filesystem::exists(dir))
+			{
+				printf("The path %s does not exists, creating directory\n",dir.c_str());
+				std::filesystem::create_directory(dir);
+			}
 			break;
 		}
 	}
 
-	if (global.max_nb_threads < global.min_nb_threads)
-		global.max_nb_threads = global.min_nb_threads;
-	if (global.max_queue_size < global.min_queue_size)
-		global.max_queue_size = global.min_queue_size;
+	if (config.max_nb_threads < config.min_nb_threads)
+		config.max_nb_threads = config.min_nb_threads;
+	if (config.thread_step < 1)
+		config.thread_step = 1;
+
+	if (config.max_queue_size < config.min_queue_size)
+		config.max_queue_size = config.min_queue_size;
+	if (config.queue_step < 1)
+		config.queue_step = 1;
 
 	if (graph == NULL)
 	{
@@ -271,31 +306,53 @@ Graph *parse_args(int argc, char *argv[])
 	return graph;
 }
 
+int span_inc(int current_value, int increment_step){
+	if(current_value < increment_step){
+		return increment_step;
+	}
+	else{
+		return current_value + increment_step;
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	Graph *g = parse_args(argc, argv);
 
-	for (int nb_threads = global.min_nb_threads; nb_threads <= global.max_nb_threads; ++nb_threads)
+
+
+	for (int queue_size = config.min_queue_size; queue_size <= config.max_queue_size; queue_size = span_inc(queue_size,config.queue_step))
 	{
-		for (int queue_size = global.min_queue_size; queue_size <= global.max_queue_size; ++queue_size)
+		std::stringstream path;
+		std::ofstream outfile;
+		path << config.output_path << queue_size;
+		if (config.output_path != "")
 		{
-			for (int sample = 0; sample < global.nb_samples; ++sample)
+			std::remove(path.str().c_str());
+			outfile.open(path.str(), std::ios_base::out);
+			outfile << "nb_thread;distance;min_duration;max_duration;avg_duration\n";
+			outfile.close();
+		}
+
+		for (int nb_threads = config.min_nb_threads; nb_threads <= config.max_nb_threads; nb_threads = span_inc(nb_threads,config.thread_step))
+		{
+			std::deque<int64_t> durations;
+			for (int sample = 0; sample < config.nb_samples; ++sample)
 			{
-				global.nb_threads = nb_threads;
-				global.queue_size = queue_size;
+				config.queue_size = queue_size;
 
 				auto start = std::chrono::high_resolution_clock::now();
 
-				if (global.verbose != VER_LOG_STAT)
+				if (config.verbose != VER_LOG_STAT && config.verbose != VER_NONE)
 				{
-					std::cout << "number of threads " << global.nb_threads << '\n';
-					std::cout << "size of queue " << global.queue_size << '\n';
+					std::cout << "number of threads " << nb_threads << '\n';
+					std::cout << "size of queue " << config.queue_size << '\n';
 				}
 
-				if (global.verbose & VER_GRAPH)
+				if (config.verbose & VER_GRAPH)
 					std::cout << COLOR.BLUE << g << COLOR.ORIGINAL;
 
-				if (global.verbose & VER_COUNTERS)
+				if (config.verbose & VER_COUNTERS)
 					reset_counters(g->size());
 
 				global.shortest = new AtomicPath(g);
@@ -308,43 +365,64 @@ int main(int argc, char *argv[])
 				Path *current = new Path(g);
 				current->add(0);
 
-				pthread_t *workers = new pthread_t[global.nb_threads];
+				pthread_t *workers = new pthread_t[nb_threads];
 
-				global.jobs = new Queue(global.queue_size);
+				global.jobs = new Queue(config.queue_size);
 				global.jobs->push(current);
 
 				pthread_create(workers, NULL, branch_and_bound_task, NULL);
-				for (int i = 1; i < global.nb_threads; ++i)
+				for (int i = 1; i < nb_threads; ++i)
 				{
 					pthread_create(&(workers[i]), NULL, branch_and_bound_task, NULL);
 				}
 
-				for (int i = 0; i < global.nb_threads; ++i)
+				for (int i = 0; i < nb_threads; ++i)
 				{
 					pthread_join(workers[i], NULL);
 				}
 
-				if (global.verbose != VER_LOG_STAT)
+				if (config.verbose != VER_LOG_STAT && config.verbose != VER_NONE)
 					std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
 
-				if (global.verbose & VER_COUNTERS)
+				if (config.verbose & VER_COUNTERS)
 					print_counters();
 
-				if (global.verbose & VER_LOG_STAT)
+				auto stop = std::chrono::high_resolution_clock::now();
+				int64_t duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+				durations.push_front(duration);
+				if (config.verbose & VER_LOG_STAT)
 				{
 					printf("%d;%d;%d;%ld\n",
-						   global.nb_threads,
-						   global.queue_size,
+						   nb_threads,
+						   config.queue_size,
 						   global.shortest->distance(),
-						   std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count());
+						   duration);
 				}
-
-				delete global.shortest;
 				delete current;
 				delete workers;
 			}
+
+			if (config.output_path != "")
+			{
+				int64_t min_duration = *std::min_element(durations.begin(), durations.end());
+				int64_t max_duration = *std::max_element(durations.begin(), durations.end());
+				int64_t avg_duration = std::accumulate(durations.begin(), durations.end(), (int64_t)0) / config.nb_samples;
+
+				std::ofstream outfile;
+				outfile.open(path.str(), std::ios_base::app);
+
+				outfile << nb_threads << ";";
+				outfile << global.shortest->distance() << ";";
+				outfile << min_duration << ";";
+				outfile << max_duration << ";";
+				outfile << avg_duration << "\n";
+
+				outfile.close();
+			}
 		}
 	}
+
+	delete global.shortest;
 
 	return 0;
 }
