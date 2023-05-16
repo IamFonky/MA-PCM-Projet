@@ -53,6 +53,7 @@ static struct
 	int queue_step;
 	int queue_size;
 	std::string output_path;
+	int cutoff_depth;
 } config;
 
 static struct
@@ -117,7 +118,7 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if (global.jobs->get_size() < config.queue_size)
+					if (current->size() > config.cutoff_depth && global.jobs->get_size() < config.queue_size)
 					{
 						Path *newPath = new Path(current);
 						pushed = global.jobs->push(newPath);
@@ -230,6 +231,7 @@ Graph *parse_args(int argc, char *argv[])
 		{"queue-size-max", required_argument, NULL, 'Q'},
 		{"queue-step", required_argument, NULL, 'j'},
 		{"output-path", required_argument, NULL, 'o'},
+		{"cutoff-depth", required_argument, NULL, 'c'},
 	};
 
 	Graph *graph = NULL;
@@ -242,8 +244,9 @@ Graph *parse_args(int argc, char *argv[])
 	config.max_queue_size = -1;
 	config.queue_step = 1;
 	config.output_path = "";
+	config.cutoff_depth = 0;
 
-	while ((opt = getopt_long(argc, argv, "f:v:s:t:T:q:Q:o:i:j:", longopts, 0)) != -1)
+	while ((opt = getopt_long(argc, argv, "f:v:s:t:T:q:Q:o:i:j:c:", longopts, 0)) != -1)
 	{
 		switch (opt)
 		{
@@ -274,13 +277,16 @@ Graph *parse_args(int argc, char *argv[])
 		case 'j':
 			config.queue_step = atoi(optarg);
 			break;
+		case 'c':
+			config.cutoff_depth = atoi(optarg);
+			break;
 		case 'o':
 			config.output_path = optarg;
 			std::filesystem::path p(config.output_path);
 			std::filesystem::path dir = p.parent_path();
 			if (!std::filesystem::exists(dir))
 			{
-				printf("The path %s does not exists, creating directory\n",dir.c_str());
+				printf("The path %s does not exists, creating directory\n", dir.c_str());
 				std::filesystem::create_directory(dir);
 			}
 			break;
@@ -306,11 +312,14 @@ Graph *parse_args(int argc, char *argv[])
 	return graph;
 }
 
-int span_inc(int current_value, int increment_step){
-	if(current_value < increment_step){
+int span_inc(int current_value, int increment_step)
+{
+	if (current_value < increment_step)
+	{
 		return increment_step;
 	}
-	else{
+	else
+	{
 		return current_value + increment_step;
 	}
 }
@@ -319,9 +328,7 @@ int main(int argc, char *argv[])
 {
 	Graph *g = parse_args(argc, argv);
 
-
-
-	for (int queue_size = config.min_queue_size; queue_size <= config.max_queue_size; queue_size = span_inc(queue_size,config.queue_step))
+	for (int queue_size = config.min_queue_size; queue_size <= config.max_queue_size; queue_size = span_inc(queue_size, config.queue_step))
 	{
 		std::stringstream path;
 		std::ofstream outfile;
@@ -334,7 +341,7 @@ int main(int argc, char *argv[])
 			outfile.close();
 		}
 
-		for (int nb_threads = config.min_nb_threads; nb_threads <= config.max_nb_threads; nb_threads = span_inc(nb_threads,config.thread_step))
+		for (int nb_threads = config.min_nb_threads; nb_threads <= config.max_nb_threads; nb_threads = span_inc(nb_threads, config.thread_step))
 		{
 			std::deque<int64_t> durations;
 			for (int sample = 0; sample < config.nb_samples; ++sample)
