@@ -151,7 +151,8 @@ int main(int argc, char* argv[])
 	current->add(0);
 	branch_and_bound(current);
 
-	std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
+	if(global.verbose != VER_NONE)
+		std::cout << COLOR.RED << "shortest " << global.shortest << COLOR.ORIGINAL << '\n';
 
 	if (global.verbose & VER_COUNTERS)
 		print_counters();

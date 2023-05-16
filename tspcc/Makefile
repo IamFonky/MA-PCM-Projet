@@ -1,7 +1,7 @@
 #  Copyright (c) 2012 Marcelo Pasin. All rights reserved.
 
-CFLAGS=-O3 -Wall -g
-LDFLAGS=-O3 -lm -g
+CFLAGS=-O3 -Wall
+LDFLAGS=-O3 -lm
 
 all: tspcc queue_path_test atomic
 
@@ -10,6 +10,12 @@ tspcc: tspcc.o
 	
 tspcc.o: tspcc.cpp graph.hpp path.hpp tspfile.hpp atomic_queue.hpp
 	c++ $(CFLAGS) -c tspcc.cpp
+
+tspcc_orig: tspcc_orig.o
+	c++ -o tspcc_orig $(LDFLAGS) tspcc_orig.o
+	
+tspcc_orig.o: tspcc_orig.cpp graph.hpp path.hpp tspfile.hpp atomic_queue.hpp
+	c++ $(CFLAGS) -c tspcc_orig.cpp
 
 queue_path_test: queue_path_test.o
 	c++ -o queue_path_test $(LDFLAGS) queue_path_test.o
