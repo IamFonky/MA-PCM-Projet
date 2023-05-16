@@ -12,6 +12,7 @@
 
 #include <pthread.h>
 #include <getopt.h>
+#include <unistd.h>
 
 #include <queue>
 #include <chrono>
@@ -34,6 +35,7 @@ enum Verbosity
 	VER_COUNTERS = 16,
 	VER_QUEUE = 32,
 	VER_LOG_STAT = 64,
+	VER_LOG_RUNNING = 128,
 	VER_ALL = 255
 };
 
@@ -70,6 +72,7 @@ static struct
 	int total; // number of paths to check
 	int *fact;
 	std::atomic_int nb_thread_running;
+	std::atomic_int nb_thread_dead;
 } global;
 
 static const struct
@@ -118,7 +121,9 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if (current->size() > config.cutoff_depth && global.jobs->get_size() < config.queue_size)
+					if ((current->size() < (current->max() - config.cutoff_depth))
+					&& (global.jobs->get_size() < config.queue_size))
+					// if ((global.jobs->get_size() < config.queue_size))
 					{
 						Path *newPath = new Path(current);
 						pushed = global.jobs->push(newPath);
@@ -168,11 +173,38 @@ static void *branch_and_bound_task(void *arg)
 				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
 			}
+			global.nb_thread_running++;
+			if (config.verbose & VER_LOG_RUNNING)
+			{
+				std::cout << "nb thread running " << global.nb_thread_running << '\n';
+				std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
+				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
+				std::cout << "path size " << job_to_do->size() << '\n';
+				std::cout << "max size " << job_to_do->max() - config.cutoff_depth << '\n';
+			}
 			branch_and_bound(job_to_do);
+			global.nb_thread_running--;
+			if (config.verbose & VER_LOG_RUNNING)
+			{
+				std::cout << "nb thread running " << global.nb_thread_running << '\n';
+				std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
+				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
+				std::cout << "path size " << job_to_do->size() << '\n';
+				std::cout << "max size " << job_to_do->max() - config.cutoff_depth << '\n';
+			}
 			job_to_do = global.jobs->pop();
+			if (job_to_do == nullptr)
+			{
+				usleep(1000000);
+			}
 		}
-		global.nb_thread_running--;
 	} while (global.nb_thread_running > 0);
+	global.nb_thread_dead++;
+	if (config.verbose & VER_LOG_RUNNING)
+	{
+		std::cout << "nb thread running " << global.nb_thread_running << '\n';
+		std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
+	}
 	return 0;
 }
 
@@ -193,6 +225,7 @@ void reset_counters(int size)
 		}
 	}
 	global.total = global.fact[0] = global.fact[1];
+	global.nb_thread_dead = 0;
 }
 
 void print_counters()
