@@ -1,0 +1,3 @@
+[31mshortest [864: 0, 3, 2, 7, 12, 13, 14, 15, 8, 9, 10, 11, 6, 1, 5, 4, 0][39m
+381.09user 0.01system 6:21.26elapsed 99%CPU (0avgtext+0avgdata 3920maxresident)k
+0inputs+8outputs (0major+145minor)pagefaults 0swaps
