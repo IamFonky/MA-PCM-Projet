@@ -8,7 +8,7 @@ all: tspcc queue_path_test atomic
 tspcc: tspcc.o
 	c++ -o tspcc $(LDFLAGS) tspcc.o
 	
-tspcc.o: tspcc.cpp graph.hpp path.hpp tspfile.hpp atomic_queue.hpp
+tspcc.o: tspcc.cpp graph.hpp path.hpp tspfile.hpp atomic_queue.hpp lifo.hpp
 	c++ $(CFLAGS) -c tspcc.cpp
 
 tspcc_orig: tspcc_orig.o
