@@ -8,6 +8,7 @@
 #include "path.hpp"
 #include "atomic_path.hpp"
 #include "tspfile.hpp"
+#include "lifo.hpp"
 #include "include/atomic_queue/atomic_queue.h"
 
 #include <pthread.h>
@@ -39,9 +40,9 @@ enum Verbosity
 	VER_ALL = 255
 };
 
-using Element = Path *;															 // Queue element type.
-Element constexpr NIL = static_cast<Element>(NULL);								 // Atomic elements require a special value that cannot be pushed/popped.
-using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
+// using Element = Path *;															 // Queue element type.
+// Element constexpr NIL = static_cast<Element>(NULL);								 // Atomic elements require a special value that cannot be pushed/popped.
+// using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
 
 static struct
 {
@@ -61,7 +62,7 @@ static struct
 static struct
 {
 	AtomicPath *shortest;
-	Queue *jobs;
+	AtomicLifo<Path> *jobs;
 	struct
 	{
 		int verified; // # of paths checked
@@ -407,7 +408,7 @@ int main(int argc, char *argv[])
 
 				pthread_t *workers = new pthread_t[nb_threads];
 
-				global.jobs = new Queue(config.queue_size);
+				global.jobs = new AtomicLifo<Path>(config.queue_size);
 				global.jobs->push(current);
 
 				pthread_create(workers, NULL, branch_and_bound_task, NULL);
