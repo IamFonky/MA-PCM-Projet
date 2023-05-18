@@ -28,11 +28,11 @@ public:
     bool push(T* item)
     {
         int t = top;
+        int newt = t+1;
 
-        if(t >= size){
+        if(newt >= size){
             return false;
         }
-        int newt = t+1;
         if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
             return false;
         }
@@ -46,14 +46,14 @@ public:
         int t = top;
         T* item;
 
-        if(t <= 0){
+        if(t < 0){
             return nullptr;
         }
         int newt = t-1;
         if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
             return nullptr;
         }
-        item = data[newt];
+        item = data[t];
 
         return item;
     }

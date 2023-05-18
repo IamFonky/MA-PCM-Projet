@@ -7,7 +7,7 @@ then
 
     make tspcc
 
-    ./tspcc -f $1 -v 0 -s 5 -t 1 -T 256 -i 8 -q 64 -Q 1024 -j 128 -c 13 -o "../data/$2/"
+    ./tspcc -f $1 -v 0 -s 5 -t 8 -T 256 -i 16 -q 64 -Q 1024 -j 128 -c 12 -o "../data/$2/"
 
     cd ../plots
 

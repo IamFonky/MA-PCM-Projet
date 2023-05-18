@@ -74,6 +74,7 @@ static struct
 	int *fact;
 	std::atomic_int nb_thread_running;
 	std::atomic_int nb_thread_dead;
+	int nb_thread;
 } global;
 
 static const struct
@@ -96,7 +97,7 @@ static void branch_and_bound(Path *current)
 	{
 		// this is a leaf
 		current->add(0);
-		if (config.verbose & VER_COUNTERS)
+		if (config.verbose & (VER_COUNTERS | VER_LOG_RUNNING))
 			global.counter.verified++;
 		if (current->distance() < global.shortest->distance())
 		{
@@ -178,7 +179,6 @@ static void *branch_and_bound_task(void *arg)
 			if (config.verbose & VER_LOG_RUNNING)
 			{
 				std::cout << "nb thread running " << global.nb_thread_running << '\n';
-				std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
 				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
 				std::cout << "path size " << job_to_do->size() << '\n';
 				std::cout << "max size " << job_to_do->max() - config.cutoff_depth << '\n';
@@ -187,19 +187,17 @@ static void *branch_and_bound_task(void *arg)
 			global.nb_thread_running--;
 			if (config.verbose & VER_LOG_RUNNING)
 			{
-				std::cout << "nb thread running " << global.nb_thread_running << '\n';
 				std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
-				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
-				std::cout << "path size " << job_to_do->size() << '\n';
-				std::cout << "max size " << job_to_do->max() - config.cutoff_depth << '\n';
+				std::cout << "completeness " << global.counter.verified * 100.  / (double)global.total<< "%" << '\n';
 			}
 			job_to_do = global.jobs->pop();
-			if (job_to_do == nullptr)
-			{
-				usleep(1000000);
-			}
+			// if (job_to_do == nullptr)
+			// {
+			// 	usleep(1000000);
+			// }
 		}
 	} while (global.nb_thread_running > 0);
+	
 	global.nb_thread_dead++;
 	if (config.verbose & VER_LOG_RUNNING)
 	{
@@ -377,6 +375,7 @@ int main(int argc, char *argv[])
 
 		for (int nb_threads = config.min_nb_threads; nb_threads <= config.max_nb_threads; nb_threads = span_inc(nb_threads, config.thread_step))
 		{
+			global.nb_thread = nb_threads;
 			std::deque<int64_t> durations;
 			for (int sample = 0; sample < config.nb_samples; ++sample)
 			{
@@ -393,7 +392,7 @@ int main(int argc, char *argv[])
 				if (config.verbose & VER_GRAPH)
 					std::cout << COLOR.BLUE << g << COLOR.ORIGINAL;
 
-				if (config.verbose & VER_COUNTERS)
+				if (config.verbose & (VER_COUNTERS | VER_LOG_RUNNING))
 					reset_counters(g->size());
 
 				global.shortest = new AtomicPath(g);
@@ -410,6 +409,7 @@ int main(int argc, char *argv[])
 
 				global.jobs = new AtomicLifo<Path>(config.queue_size);
 				global.jobs->push(current);
+				global.nb_thread_dead = 0;
 
 				pthread_create(workers, NULL, branch_and_bound_task, NULL);
 				for (int i = 1; i < nb_threads; ++i)

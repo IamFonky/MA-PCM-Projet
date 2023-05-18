@@ -2,6 +2,7 @@
 #include "graph.hpp"
 #include "path.hpp"
 #include "tspfile.hpp"
+#include "lifo.hpp"
 
 
 #include <pthread.h>
@@ -11,8 +12,8 @@
 unsigned constexpr CAPACITY = 10;
 
 using Element = Path*;                                                        // Queue element type.
-Element constexpr NIL = static_cast<Element>(NULL);                                // Atomic elements require a special value that cannot be pushed/popped.
-using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
+// Element constexpr NIL = static_cast<Element>(NULL);                                // Atomic elements require a special value that cannot be pushed/popped.
+// using Queue = atomic_queue::AtomicQueueB<Element, std::allocator<Element>, NIL>; // Use heap-allocated buffer.
 
 
 int main(int argc, char *argv[])
@@ -29,7 +30,7 @@ int main(int argc, char *argv[])
     std::cout << "path2 " << path2 << '\n';
 
     // Create a queue object shared between all producers and consumers.
-    Queue q{CAPACITY};
+    AtomicLifo<Path> q{CAPACITY};
 
     std::cout << "pushing path2 in queue " << '\n';
     q.push(path2);

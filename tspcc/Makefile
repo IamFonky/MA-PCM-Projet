@@ -30,4 +30,4 @@ omp:
 	make tspcc CFLAGS="-fopenmp -O3" LDFLAGS="-fopenmp -O3"
 
 clean:
-	rm -f *.o tspcc atomic
+	rm -f *.o tspcc tspcc_orig atomic
