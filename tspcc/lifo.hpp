@@ -11,12 +11,14 @@ private:
     T **data;
     int top;
     int size;
-    std::atomic_flag _lock = ATOMIC_FLAG_INIT;
+    uint64_t op_counter;
+
 public:
     AtomicLifo(int size)
     {
         data = new T*[size];
         top = -1;
+        op_counter = 0;
         this->size = size;
     }
 
@@ -27,10 +29,14 @@ public:
 
     bool push(T* item)
     {
+        uint64_t counter = op_counter;
         int t = top;
         int newt = t+1;
 
         if(newt >= size){
+            return false;
+        }
+        if(!__atomic_compare_exchange_n(&op_counter, &counter, counter + 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
             return false;
         }
         if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
@@ -43,6 +49,7 @@ public:
 
     T* pop()
     {
+        uint64_t counter = op_counter;
         int t = top;
         T* item;
 
@@ -50,6 +57,9 @@ public:
             return nullptr;
         }
         int newt = t-1;
+        if(!__atomic_compare_exchange_n(&op_counter, &counter, counter + 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
+            return nullptr;
+        }
         if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
             return nullptr;
         }
