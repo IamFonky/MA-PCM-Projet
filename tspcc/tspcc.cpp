@@ -175,7 +175,6 @@ static void *branch_and_bound_task(void *arg)
 				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
 			}
-			global.nb_thread_running++;
 			if (config.verbose & VER_LOG_RUNNING)
 			{
 				std::cout << "nb thread running " << global.nb_thread_running << '\n';
@@ -184,6 +183,7 @@ static void *branch_and_bound_task(void *arg)
 				std::cout << "max size " << job_to_do->max() << '\n';
 				std::cout << "cutoff size " << job_to_do->max() - config.cutoff_depth << '\n';
 			}
+			global.nb_thread_running++;
 			branch_and_bound(job_to_do);
 			global.nb_thread_running--;
 			if (config.verbose & VER_LOG_RUNNING)

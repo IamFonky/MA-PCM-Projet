@@ -8,9 +8,9 @@ set style fill transparent solid 0.1 noborder
 set xlabel "Number of threads"
 set ylabel "Speed [ms]"
 
-set terminal png size 1920,1080 enhanced
+set terminal jpeg size 1920,1080 enhanced
 #set output '../plots/plot.png'
-set output ARG1.".png"
+set output ARG2.".jpeg"
 
 plot for [i=1:words(FILES)] path(i) using 1:3:4 with filledcurves lc tostring(i) notitle,\
      for [i=1:words(FILES)] path(i) using 1:5 smooth mcs with lines lc tostring(i) notitle,\

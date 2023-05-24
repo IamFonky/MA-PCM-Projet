@@ -2,7 +2,16 @@
 #ifndef _lifo_hpp
 #define _lifo_hpp
 
+#define LOCK_TYPE_MUTEX 1
+#define LOCK_TYPE_CAS_FENCE 2
+#define LOCK_TYPE_CAS 3
+#define LOCK_TYPE LOCK_TYPE_CAS_FENCE
+
+#if LOCK_TYPE == LOCK_TYPE_MUTEX
+#include <pthread.h>
+#else
 #include <atomic>
+#endif
 
 template <typename T>
 class AtomicLifo
@@ -11,14 +20,16 @@ private:
     T **data;
     int top;
     int size;
-    uint64_t op_counter;
-
+#if LOCK_TYPE == LOCK_TYPE_MUTEX
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+#elif LOCK_TYPE == LOCK_TYPE_CAS_FENCE
+    int critical = 0;
+#endif
 public:
     AtomicLifo(int size)
     {
-        data = new T*[size];
+        data = new T *[size];
         top = -1;
-        op_counter = 0;
         this->size = size;
     }
 
@@ -27,49 +38,131 @@ public:
         delete data;
     }
 
-    bool push(T* item)
+#if LOCK_TYPE == LOCK_TYPE_MUTEX
+    bool push(T *item)
     {
-        uint64_t counter = op_counter;
-        int t = top;
-        int newt = t+1;
 
-        if(newt >= size){
+        if (pthread_mutex_trylock(&mutex))
+        {
             return false;
         }
-        if(!__atomic_compare_exchange_n(&op_counter, &counter, counter + 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
+        int t = top;
+        int newt = t + 1;
+        if (newt >= size)
+        {
+            pthread_mutex_unlock(&mutex);
             return false;
         }
-        if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
+        top = newt;
+        data[newt] = item;
+        pthread_mutex_unlock(&mutex);
+        return true;
+    }
+
+    T *pop()
+    {
+
+        if (pthread_mutex_trylock(&mutex))
+        {
+            return nullptr;
+        }
+        int t = top;
+        T *item;
+
+        if (t < 0)
+        {
+            pthread_mutex_unlock(&mutex);
+            return nullptr;
+        }
+        // int newt = t-1;
+        top = t - 1;
+        item = data[t];
+        pthread_mutex_unlock(&mutex);
+        return item;
+    }
+
+#elif LOCK_TYPE == LOCK_TYPE_CAS_FENCE
+    bool push(T *item)
+    {
+        int OPEN = 0;
+        if (!__atomic_compare_exchange_n(&critical, &OPEN, 1, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        {
+            return false;
+        }
+        int t = top;
+        int newt = t + 1;
+        if (newt >= size)
+        {
+            __atomic_store_n(&critical, 0, __ATOMIC_SEQ_CST);
+            return false;
+        }
+        top = newt;
+        data[newt] = item;
+        __atomic_store_n(&critical, 0, __ATOMIC_SEQ_CST);
+        return true;
+    }
+
+    T *pop()
+    {
+        int OPEN = 0;
+        if (!__atomic_compare_exchange_n(&critical, &OPEN, 1, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        {
+            return nullptr;
+        }
+        int t = top;
+        T *item;
+
+        if (t < 0)
+        {
+            __atomic_store_n(&critical, 0, __ATOMIC_SEQ_CST);
+            return nullptr;
+        }
+        top = t - 1;
+        item = data[t];
+        __atomic_store_n(&critical, 0, __ATOMIC_SEQ_CST);
+        return item;
+    }
+#elif LOCK_TYPE == LOCK_TYPE_CAS
+    bool push(T *item)
+    {
+        int t = top;
+        int newt = t + 1;
+
+        if (newt >= size)
+        {
+            return false;
+        }
+        if (!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        {
             return false;
         }
         data[newt] = item;
         return true;
     }
 
-
-    T* pop()
+    T *pop()
     {
-        uint64_t counter = op_counter;
         int t = top;
-        T* item;
+        T *item;
 
-        if(t < 0){
+        if (t < 0)
+        {
             return nullptr;
         }
-        int newt = t-1;
-        if(!__atomic_compare_exchange_n(&op_counter, &counter, counter + 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
-            return nullptr;
-        }
-        if(!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)){
+        int newt = t - 1;
+        if (!__atomic_compare_exchange(&top, &t, &newt, 0, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        {
             return nullptr;
         }
         item = data[t];
 
         return item;
     }
+#endif
 
-    int get_size(){
-        return top+1;
+    int get_size()
+    {
+        return top + 1;
     }
 };
 
