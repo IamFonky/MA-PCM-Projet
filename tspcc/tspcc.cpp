@@ -47,7 +47,7 @@ enum Verbosity
 static struct
 {
 	Verbosity verbose;
-	int nb_samples;
+	int64_t nb_samples;
 	int min_nb_threads;
 	int max_nb_threads;
 	int thread_step;
@@ -181,7 +181,8 @@ static void *branch_and_bound_task(void *arg)
 				std::cout << "nb thread running " << global.nb_thread_running << '\n';
 				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
 				std::cout << "path size " << job_to_do->size() << '\n';
-				std::cout << "max size " << job_to_do->max() - config.cutoff_depth << '\n';
+				std::cout << "max size " << job_to_do->max() << '\n';
+				std::cout << "cutoff size " << job_to_do->max() - config.cutoff_depth << '\n';
 			}
 			branch_and_bound(job_to_do);
 			global.nb_thread_running--;

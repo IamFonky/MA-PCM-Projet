@@ -17,7 +17,7 @@
 class Path {
 protected:
 	int _size;
-	int _distance;
+	long _distance;
 	int* _nodes;
 	Graph* _graph;
 public:
