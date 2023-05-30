@@ -12,7 +12,6 @@ set terminal jpeg size 1920,1080 enhanced
 #set output '../plots/plot.png'
 set output ARG2.".jpeg"
 
-plot for [i=1:words(FILES)] path(i) using 1:3:4 with filledcurves lc tostring(i) notitle,\
-     for [i=1:words(FILES)] path(i) using 1:5 smooth mcs with lines lc tostring(i) notitle,\
-     for [i=1:words(FILES)] path(i) using 1:5 with points lc tostring(i) lt 1 pt 7 ps 1.5 lw 3 title ARG3.item(i)
+plot for [i=1:words(FILES)] path(i) using 1:7 smooth mcs with lines lc tostring(i) notitle,\
+     for [i=1:words(FILES)] path(i) using 1:7 with points lc tostring(i) lt 1 pt 7 ps 1.5 lw 3 title ARG3.item(i)
 
