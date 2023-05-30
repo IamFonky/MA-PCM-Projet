@@ -8,6 +8,7 @@
 #include <cstring>
 #include <algorithm>
 #include <iterator>
+#include <limits.h>
 
 #include "graph.hpp"
 
@@ -39,6 +40,7 @@ public:
 
 	Path(Graph* graph)
 	{
+		_size = INT_MAX;
 		_graph = graph;
 		_nodes = new int[max() + 1];
 		_distance = 0;

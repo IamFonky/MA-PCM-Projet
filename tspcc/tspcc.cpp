@@ -26,6 +26,11 @@
 #include <numeric>
 #include <filesystem>
 
+#define COUNT_POP_PUSH 0
+#define COUNT_PATH_TEST 0
+#define COUNT_PATH_LOCK 0
+#define DISPLAY_DEAD_TIMINGS 0
+
 enum Verbosity
 {
 	VER_NONE = 0,
@@ -74,6 +79,19 @@ static struct
 	int *fact;
 	std::atomic_int nb_thread_running;
 	std::atomic_int nb_thread_dead;
+#if COUNT_POP_PUSH
+	std::atomic_int nb_pop;
+	std::atomic_int nb_push;
+#endif
+#if COUNT_PATH_TEST
+	std::atomic_int nb_path_test;
+#endif
+#if COUNT_PATH_LOCK
+	std::atomic_long nb_path_lock;
+#endif
+#if DISPLAY_DEAD_TIMINGS
+	std::chrono::_V2::system_clock::time_point start_time;
+#endif
 	int nb_thread;
 } global;
 
@@ -103,7 +121,15 @@ static void branch_and_bound(Path *current)
 		{
 			if (config.verbose & VER_SHORTER)
 				std::cout << "shorter: " << current << '\n';
+#if COUNT_PATH_LOCK
+			global.nb_path_lock += global.shortest->copyIfShorter(current);
+#else
 			global.shortest->copyIfShorter(current);
+#endif
+#if COUNT_PATH_TEST
+			global.nb_path_test++;
+#endif
+
 			if (config.verbose & VER_COUNTERS)
 				global.counter.found++;
 		}
@@ -123,8 +149,7 @@ static void branch_and_bound(Path *current)
 					// Vérif si queue est dispo
 					// si oui, écrire dans la queue
 					bool pushed = false;
-					if ((current->size() < (current->max() - config.cutoff_depth))
-					&& (global.jobs->get_size() < config.queue_size))
+					if ((current->size() < (current->max() - config.cutoff_depth)) && (global.jobs->get_size() < config.queue_size))
 					// if ((global.jobs->get_size() < config.queue_size))
 					{
 						Path *newPath = new Path(current);
@@ -140,6 +165,12 @@ static void branch_and_bound(Path *current)
 						{
 							delete newPath;
 						}
+#if COUNT_POP_PUSH
+						else
+						{
+							global.nb_push++;
+						}
+#endif
 					}
 					// si il n'y a pas eu de push
 					// Continuer de taffer
@@ -165,43 +196,50 @@ static void branch_and_bound(Path *current)
 
 static void *branch_and_bound_task(void *arg)
 {
+	bool running = false;
 	do
 	{
 		Path *job_to_do = global.jobs->pop();
 		while (job_to_do != nullptr)
 		{
+#if COUNT_POP_PUSH
+			global.nb_pop++;
+#endif
+			if (!running)
+			{
+				global.nb_thread_running++;
+				running = true;
+			}
 			if (config.verbose & VER_QUEUE)
 			{
 				std::cout << "pop in queue " << global.jobs->get_size() << '\n';
 				std::cout << "path " << job_to_do << '\n';
 			}
-			if (config.verbose & VER_LOG_RUNNING)
-			{
-				std::cout << "nb thread running " << global.nb_thread_running << '\n';
-				std::cout << "nb jobs " << global.jobs->get_size() << '\n';
-				std::cout << "path size " << job_to_do->size() << '\n';
-				std::cout << "max size " << job_to_do->max() << '\n';
-				std::cout << "cutoff size " << job_to_do->max() - config.cutoff_depth << '\n';
-			}
-			global.nb_thread_running++;
+
 			branch_and_bound(job_to_do);
-			global.nb_thread_running--;
-			if (config.verbose & VER_LOG_RUNNING)
-			{
-				std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
-				std::cout << "completeness " << global.counter.verified * 100.  / (double)global.total<< "%" << '\n';
-			}
 			job_to_do = global.jobs->pop();
-			// if (job_to_do == nullptr)
-			// {
-			// 	usleep(1000000);
-			// }
+		}
+		// if (config.verbose & VER_LOG_RUNNING)
+		// {
+		// 	std::cout << "nb thread running " << global.nb_thread_running << '\n';
+		// 	std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
+		// 	std::cout << "nb jobs " << global.jobs->get_size() << '\n';
+		// }
+		if (running)
+		{
+			global.nb_thread_running--;
+			running = false;
 		}
 	} while (global.nb_thread_running > 0);
-	
 	global.nb_thread_dead++;
 	if (config.verbose & VER_LOG_RUNNING)
 	{
+#if DISPLAY_DEAD_TIMINGS
+		if (global.nb_thread_dead == 1)
+		{
+			global.start_time = std::chrono::high_resolution_clock::now();
+		}
+#endif
 		std::cout << "nb thread running " << global.nb_thread_running << '\n';
 		std::cout << "nb thread dead " << global.nb_thread_dead << '\n';
 	}
@@ -370,7 +408,11 @@ int main(int argc, char *argv[])
 		{
 			std::remove(path.str().c_str());
 			outfile.open(path.str(), std::ios_base::out);
-			outfile << "nb_thread;distance;min_duration;max_duration;avg_duration\n";
+			outfile << "nb_thread;distance;min_duration;max_duration;avg_duration";
+#if COUNT_POP_PUSH
+			outfile << ";nb_pop;nb_push";
+#endif
+			outfile << "\n";
 			outfile.close();
 		}
 
@@ -380,10 +422,20 @@ int main(int argc, char *argv[])
 			std::deque<int64_t> durations;
 			for (int sample = 0; sample < config.nb_samples; ++sample)
 			{
+#if COUNT_POP_PUSH
+				global.nb_pop = 0;
+				global.nb_push = 0;
+#endif
+#if COUNT_PATH_TEST
+				global.nb_path_test = 0;
+#endif
+#if COUNT_PATH_LOCK
+				global.nb_path_lock = 0;
+#endif
+
 				config.queue_size = queue_size;
 
 				auto start = std::chrono::high_resolution_clock::now();
-
 				if (config.verbose != VER_LOG_STAT && config.verbose != VER_NONE)
 				{
 					std::cout << "number of threads " << nb_threads << '\n';
@@ -434,11 +486,26 @@ int main(int argc, char *argv[])
 				durations.push_front(duration);
 				if (config.verbose & VER_LOG_STAT)
 				{
-					printf("%d;%d;%d;%ld\n",
-						   nb_threads,
-						   config.queue_size,
-						   global.shortest->distance(),
-						   duration);
+					std::cout << nb_threads;
+					std::cout << ";" << config.queue_size;
+					std::cout << ";" << global.shortest->distance();
+					std::cout << ";" << duration;
+#if COUNT_POP_PUSH
+					std::cout << ";" << global.nb_pop;
+					std::cout << ";" << global.nb_push;
+#endif
+#if COUNT_PATH_TEST
+					std::cout << ";" << global.nb_path_test;
+#endif
+#if COUNT_PATH_LOCK
+					std::cout << ";" << global.nb_path_lock;
+#endif
+					std::cout << "\n";
+#if DISPLAY_DEAD_TIMINGS
+					auto stop = std::chrono::high_resolution_clock::now();
+					int64_t duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - global.start_time).count();
+					std::cout << "Time between first dead thread and last : " << duration << "[μs]\n";
+#endif
 				}
 				delete current;
 				delete workers;
@@ -457,6 +524,13 @@ int main(int argc, char *argv[])
 				outfile << global.shortest->distance() << ";";
 				outfile << min_duration << ";";
 				outfile << max_duration << ";";
+#if COUNT_POP_PUSH
+				outfile << global.nb_pop << ";";
+				outfile << global.nb_push << ";";
+#endif
+#if COUNT_PATH_TEST
+				outfile << global.nb_path_test << ";";
+#endif
 				outfile << avg_duration << "\n";
 
 				outfile.close();
